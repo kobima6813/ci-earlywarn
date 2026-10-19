@@ -4,7 +4,7 @@ inputs:
   endpoint: {description: "Collector URL, e.g. https://collector.example/v1/beacon", required: true}
   token: {description: "v0.2 tenant token (secret EW_TOKEN). Server assigns tenant id; salt kept for v0.1 compatibility.", required: false, default: ""}
   tenant-salt: {description: "Secret salt (store in a repo/org secret). Used to hash repo/org locally.", required: true}
-  job-status: {description: "Pass ${{ job.status }}", required: true}
+  job-status: {description: "The job status; pass the job.status context expression", required: true}
   failed-step: {description: "Optional name of the failing step; only a category is sent", required: false, default: ""}
   send-toolchain: {description: "Send node/python/java/go major.minor versions", required: false, default: "true"}
 runs:

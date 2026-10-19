@@ -4,7 +4,7 @@ inputs:
   endpoint: {description: "Collector beacon URL", required: true}
   token: {description: "CI Early-Warn tenant token (store as secret EW_TOKEN)", required: true}
   github-token: {description: "GITHUB_TOKEN; needs actions:read only", required: false, default: "${{ github.token }}"}
-  job-status: {description: "Pass ${{ job.status }}", required: true}
+  job-status: {description: "The job status; pass the job.status context expression", required: true}
   send-toolchain: {description: "Send toolchain major.minor versions", required: false, default: "true"}
   oidc: {description: "Attach a GitHub OIDC token to verify the tenant (needs permissions: id-token: write)", required: false, default: "true"}
 runs:

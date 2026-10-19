@@ -18,7 +18,7 @@ jobs:
         run: pip install cryptography && python3 -m unittest tests/test_all.py
       - name: CI Early-Warn beacon
         if: always()
-        uses: kobima6813/ci-earlywarn/action/js@v0.2
+        uses: kobima6813/ci-earlywarn/action/js@v0.2.1
         with:
           endpoint: https://collector-production-5b85.up.railway.app/v1/beacon
           token: ${{ secrets.EW_TOKEN }}

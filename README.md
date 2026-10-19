@@ -8,7 +8,7 @@ Get early warning when a new GitHub-hosted runner image starts breaking builds a
 ```bash
 curl -s -X POST https://collector-production-5b85.up.railway.app/v1/signup   # -> {"token": "ewt_..."}; save as repo secret EW_TOKEN
 # add `permissions: {actions: read, id-token: write}` to your workflow, then as the LAST step of a job:
-- {if: always(), uses: kobima6813/ci-earlywarn/action/js@v0.2, with: {endpoint: "https://collector-production-5b85.up.railway.app/v1/beacon", token: "${{ secrets.EW_TOKEN }}", job-status: "${{ job.status }}"}}
+- {if: always(), uses: kobima6813/ci-earlywarn/action/js@v0.2.1, with: {endpoint: "https://collector-production-5b85.up.railway.app/v1/beacon", token: "${{ secrets.EW_TOKEN }}", job-status: "${{ job.status }}"}}
 ```
 A full example is in `examples/smoke.yml`.
 
@@ -18,7 +18,7 @@ Neutral cross-tenant early warning for GitHub-hosted runner-image regressions.
 ## Components
 - `action/` – opt-in composite GitHub Action (`action.yml` + `beacon.py`, stdlib only). Add as the LAST step of a job:
   ```yaml
-  - uses: kobima6813/ci-earlywarn/action@v0.2   # composite fallback (needs python3 on the runner)
+  - uses: kobima6813/ci-earlywarn/action@v0.2.1   # composite fallback (needs python3 on the runner)
     if: always()
     with:
       endpoint: ${{ vars.EW_ENDPOINT }}
