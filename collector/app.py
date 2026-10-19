@@ -61,7 +61,13 @@ def make_handler(db, th, cfg):
         def do_GET(self):
             with lock: return self._get()
         def log_message(self, *a): pass
-        def _ip(self):  # behind Railway proxy use first X-Forwarded-For hop only when EW_TRUST_PROXY=1
+        _logged = [False]
+        def _ip(self):
+            if not H._logged[0]:   # one-time diagnostic: header NAMES only, never values
+                H._logged[0] = True
+                print("proxy trust:", os.environ.get("EW_TRUST_PROXY") == "1", "fwd headers:", sorted(k for k in self.headers.keys() if "forward" in k.lower() or "real" in k.lower() or k.lower().startswith("x-envoy")), flush=True)
+            return self._ip_inner()
+        def _ip_inner(self):  # behind Railway proxy use first X-Forwarded-For hop only when EW_TRUST_PROXY=1
             if os.environ.get("EW_TRUST_PROXY") == "1":
                 if self.headers.get("X-Real-IP"): return self.headers["X-Real-IP"].strip()
                 if self.headers.get("X-Forwarded-For"): return self.headers["X-Forwarded-For"].split(",")[0].strip()

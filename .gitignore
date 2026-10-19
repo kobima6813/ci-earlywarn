@@ -4,3 +4,4 @@ __pycache__/
 out/
 STATE.md
 .env
+launch/

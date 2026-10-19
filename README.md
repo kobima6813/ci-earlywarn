@@ -1,11 +1,24 @@
-# CI Early-Warn v0.1 (local only, not deployed)
+# CI Early-Warn
+
+**Live status page:** https://collector-production-5b85.up.railway.app/ · API: `/v1/status`, `/v1/alerts`
+
+Get early warning when a new GitHub-hosted runner image starts breaking builds across many repos, often days before a public issue shows up. Opt-in, anonymized and MIT-licensed.
+
+## Install (3 lines)
+```bash
+curl -s -X POST https://collector-production-5b85.up.railway.app/v1/signup   # -> {"token": "ewt_..."}; save as repo secret EW_TOKEN
+# add `permissions: {actions: read, id-token: write}` to your workflow, then as the LAST step of a job:
+- {if: always(), uses: kobima6813/ci-earlywarn/action/js@v0.2, with: {endpoint: "https://collector-production-5b85.up.railway.app/v1/beacon", token: "${{ secrets.EW_TOKEN }}", job-status: "${{ job.status }}"}}
+```
+A full example is in `examples/smoke.yml`.
+
 
 Neutral cross-tenant early warning for GitHub-hosted runner-image regressions.
 
 ## Components
 - `action/` – opt-in composite GitHub Action (`action.yml` + `beacon.py`, stdlib only). Add as the LAST step of a job:
   ```yaml
-  - uses: <owner>/ci-earlywarn/action@v0   # not published yet
+  - uses: kobima6813/ci-earlywarn/action@v0.2   # composite fallback (needs python3 on the runner)
     if: always()
     with:
       endpoint: ${{ vars.EW_ENDPOINT }}

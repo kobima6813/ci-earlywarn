@@ -3,7 +3,7 @@
 2. Volume mounted at `/data`; env `EW_DB=/data/earlywarn.db`. Optional env `EW_WEBHOOK_URL` (secret).
 3. Cron service (Railway cron, every 30 min): `python3 -m collector.bootstrap` for bootstrap polling (unauthenticated GitHub, ~2 calls/run, within 60/h).
 4. Generate a Railway domain; put status page at `/`. Add per-tenant ingest tokens + rate limit before public launch.
-5. Publish Action: separate public repo `<org>/ci-earlywarn-action`, tag `v0`, Marketplace listing — only after approval.
+5. Publish Action: separate public repo `kobima6813/ci-earlywarn` (done), tag `v0.2`, Marketplace listing — only after approval.
 Cost estimate: hobby plan, single small service + volume (~$5–10/mo at v0 volumes).
 
 ## v0.2 (not executed)
