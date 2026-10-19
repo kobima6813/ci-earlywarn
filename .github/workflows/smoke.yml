@@ -1,0 +1,25 @@
+name: smoke
+on:
+  push: {branches: [main]}
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read     # lets the action read this run's job steps
+  id-token: write   # lets the action prove this is a real GitHub repo (OIDC)
+jobs:
+  smoke:
+    strategy:
+      matrix: {os: [ubuntu-latest, windows-latest, macos-latest]}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests
+        if: matrix.os == 'ubuntu-latest'
+        run: pip install cryptography && python3 -m unittest tests/test_all.py
+      - name: CI Early-Warn beacon
+        if: always()
+        uses: kobima6813/ci-earlywarn/action/js@v0.2
+        with:
+          endpoint: https://collector-production-5b85.up.railway.app/v1/beacon
+          token: ${{ secrets.EW_TOKEN }}
+          job-status: ${{ job.status }}
