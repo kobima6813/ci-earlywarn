@@ -19,6 +19,14 @@ class Config:
         self.require_eligibility = True
         self.__dict__.update(kw)
 
+def ip_key(ip):
+    """Rate-limit key: IPv4 as-is, IPv6 collapsed to its /48 (clients can rotate addresses inside their prefix)."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+        return str(ipaddress.ip_network(f"{a}/48", strict=False)) if a.version == 6 else str(a)
+    except ValueError: return ip
+
 def eligible(db, cfg):
     return S.eligible_tenants(db, cfg.min_age_days) if cfg.require_eligibility else None
 
@@ -66,7 +74,7 @@ def make_handler(db, th, cfg):
             if not H._logged[0]:   # one-time diagnostic: header NAMES only, never values
                 H._logged[0] = True
                 print("proxy trust:", os.environ.get("EW_TRUST_PROXY") == "1", "fwd headers:", sorted(k for k in self.headers.keys() if "forward" in k.lower() or "real" in k.lower() or k.lower().startswith("x-envoy")), flush=True)
-            return self._ip_inner()
+            return ip_key(self._ip_inner())
         def _ip_inner(self):  # behind Railway proxy use first X-Forwarded-For hop only when EW_TRUST_PROXY=1
             if os.environ.get("EW_TRUST_PROXY") == "1":
                 if self.headers.get("X-Real-IP"): return self.headers["X-Real-IP"].strip()

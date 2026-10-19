@@ -109,6 +109,11 @@ class Concurrency(unittest.TestCase):
     def test_version_key_mixed(self):
         self.assertEqual(sorted(["20261019.1", "1", "abc", "20261005.2"], key=detector.version_key)[0], "1")
 
+class IPKey(unittest.TestCase):
+    def test_ipv6_prefix(self):
+        self.assertEqual(app.ip_key("2a09:bac5:37ab:4aa::77:7b"), app.ip_key("2a09:bac5:37ab:26be::3dc:71"))
+        self.assertEqual(app.ip_key("1.2.3.4"), "1.2.3.4"); self.assertEqual(app.ip_key("junk"), "junk")
+
 class RateLimit(unittest.TestCase):
     def test_bucket(self):
         rl = security.RateLimiter(1.0, 2)
