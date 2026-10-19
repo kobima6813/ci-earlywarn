@@ -5,15 +5,18 @@ from . import app, bootstrap, security
 def _since(days):
     return (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-def background(db, lock_free=True):
+def background(db):
     first, last_purge = True, 0
     while True:
         try:
-            new = bootstrap.poll(db, _since(14 if first else 2)); first = False
+            with app.DB_LOCK: new = bootstrap.poll(db, _since(14 if first else 2))
+            first = False
             print(f"bootstrap: {len(new)} new alerts", flush=True)
         except Exception: traceback.print_exc()
         if time.time() - last_purge > 86400:
-            try: print("retention purged", security.purge(db, int(os.environ.get("EW_RETENTION_DAYS", "90"))), flush=True); last_purge = time.time()
+            try:
+                with app.DB_LOCK: n = security.purge(db, int(os.environ.get("EW_RETENTION_DAYS", "90")))
+                print("retention purged", n, flush=True); last_purge = time.time()
             except Exception: traceback.print_exc()
         time.sleep(int(os.environ.get("EW_POLL_SECONDS", "1800")))
 

@@ -10,7 +10,7 @@ class Thresholds:
     window_s: int = 72 * 3600     # only beacons within this window after first sighting
 
 def version_key(v):
-    return tuple(int(x) if x.isdigit() else x for x in v.replace("-", ".").split("."))
+    return tuple((0, int(x), "") if x.isdigit() else (1, 0, x) for x in str(v).replace("-", ".").split("."))
 
 def tenant_failure_share(rows):
     """rows: (tenant, conclusion). Share of tenants whose failure rate on this version is >=50% of their runs."""

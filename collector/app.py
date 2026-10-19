@@ -1,10 +1,11 @@
 """Collector API v0.2 (stdlib). POST /v1/signup, POST /v1/verify, POST /v1/beacon, GET /v1/status, /v1/alerts, /, /healthz."""
-import json, os, html, time, datetime
+import json, os, html, time, datetime, threading
 from zoneinfo import ZoneInfo
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from . import store, detector, alerts as A, security as S
 
 MAX_BODY = 2048
+DB_LOCK = threading.Lock()   # one shared sqlite connection: serialize requests and background jobs
 class Config:
     def __init__(self, **kw):
         self.audience = os.environ.get("EW_OIDC_AUDIENCE", "ci-earlywarn")
@@ -52,11 +53,18 @@ tr.bad{{background:#fdd}}tr.ok{{background:#efe}}</style></head><body><h1>CI Ear
 def make_handler(db, th, cfg):
     tok_rl = S.RateLimiter(cfg.token_rate, cfg.token_burst); ip_rl = S.RateLimiter(cfg.ip_rate, cfg.ip_burst)
     su_rl = S.RateLimiter(cfg.signup_rate, cfg.signup_burst)
+    lock = DB_LOCK
     class H(BaseHTTPRequestHandler):
+        timeout = 10   # drop slow clients so they cannot hold the DB lock
+        def do_POST(self):
+            with lock: return self._post()
+        def do_GET(self):
+            with lock: return self._get()
         def log_message(self, *a): pass
         def _ip(self):  # behind Railway proxy use first X-Forwarded-For hop only when EW_TRUST_PROXY=1
-            if os.environ.get("EW_TRUST_PROXY") == "1" and self.headers.get("X-Forwarded-For"):
-                return self.headers["X-Forwarded-For"].split(",")[0].strip()
+            if os.environ.get("EW_TRUST_PROXY") == "1":
+                if self.headers.get("X-Real-IP"): return self.headers["X-Real-IP"].strip()
+                if self.headers.get("X-Forwarded-For"): return self.headers["X-Forwarded-For"].split(",")[0].strip()
             return self.client_address[0]
         def _send(self, code, body, ctype="application/json"):
             b = body if isinstance(body, bytes) else (body if isinstance(body, str) else json.dumps(body)).encode()
@@ -77,7 +85,7 @@ def make_handler(db, th, cfg):
                 t["owner_hash"] = S.mark_verified(db, t["id"], claims, cfg.owner_salt)
             except Exception: pass   # unverified tenants still accepted; they just age into eligibility
             return t
-        def do_POST(self):
+        def _post(self):
             ip = self._ip()
             if not ip_rl.allow(ip): return self._send(429, {"error": "rate limit (ip)"})
             try: body = self._body()
@@ -97,7 +105,7 @@ def make_handler(db, th, cfg):
             try: store.insert(db, body)
             except Exception as e: return self._send(400, {"error": str(e)[:100]})
             run_detector(db, th, eligible_set=eligible(db, cfg)); self._send(202, {"ok": True})
-        def do_GET(self):
+        def _get(self):
             if not ip_rl.allow(self._ip()): return self._send(429, {"error": "rate limit (ip)"})
             el = eligible(db, cfg)
             if self.path == "/v1/status": return self._send(200, detector.evaluate(db, th, el))

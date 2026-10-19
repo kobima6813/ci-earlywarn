@@ -91,6 +91,24 @@ class API(unittest.TestCase):
             except urllib.error.HTTPError as e: codes.append(e.code)
         self.assertEqual(codes[:3], [201] * 3); self.assertEqual(codes[3:], [429, 429])
 
+class Concurrency(unittest.TestCase):
+    def test_parallel_beacons_no_5xx(self):
+        from concurrent.futures import ThreadPoolExecutor
+        srv, db = app.serve(":memory:", 0, cfg=app.Config(token_rate=1e6, token_burst=1e6, ip_rate=1e6, ip_burst=1e6))
+        threading.Thread(target=srv.serve_forever, daemon=True).start(); base = f"http://127.0.0.1:{srv.server_address[1]}"
+        try:
+            tok = json.load(_post(base, "/v1/signup"))["token"]
+            b = json.dumps({"image_os": "u", "image_version": "20261019.1", "conclusion": "success", "ts": 1}).encode()
+            def one(_):
+                try: return _post(base, "/v1/beacon", b, {"Authorization": "Bearer " + tok}).status
+                except urllib.error.HTTPError as e: return e.code
+                except Exception: return -1
+            with ThreadPoolExecutor(20) as ex: codes = list(ex.map(one, range(100)))
+            self.assertEqual(codes, [202] * 100)
+        finally: srv.shutdown()
+    def test_version_key_mixed(self):
+        self.assertEqual(sorted(["20261019.1", "1", "abc", "20261005.2"], key=detector.version_key)[0], "1")
+
 class RateLimit(unittest.TestCase):
     def test_bucket(self):
         rl = security.RateLimiter(1.0, 2)
