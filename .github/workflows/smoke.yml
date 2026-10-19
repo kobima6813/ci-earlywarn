@@ -23,3 +23,12 @@ jobs:
           endpoint: https://collector-production-5b85.up.railway.app/v1/beacon
           token: ${{ secrets.EW_TOKEN }}
           job-status: ${{ job.status }}
+  published-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: CI Early-Warn beacon (published action)
+        if: always()
+        uses: kobima6813/ci-earlywarn-action@v1
+        with:
+          token: ${{ secrets.EW_TOKEN }}
+          job-status: ${{ job.status }}
