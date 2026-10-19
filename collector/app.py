@@ -104,7 +104,7 @@ def make_handler(db, th, cfg):
             body["tenant"] = S.canonical_tenant(t)          # server-assigned; client cannot choose its tenant id
             try: store.insert(db, body)
             except Exception as e: return self._send(400, {"error": str(e)[:100]})
-            run_detector(db, th, eligible_set=eligible(db, cfg)); self._send(202, {"ok": True})
+            run_detector(db, th, eligible_set=eligible(db, cfg)); self._send(202, {"ok": True, "verified": bool(t.get("owner_hash"))})
         def _get(self):
             if not ip_rl.allow(self._ip()): return self._send(429, {"error": "rate limit (ip)"})
             el = eligible(db, cfg)

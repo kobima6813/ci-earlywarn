@@ -31,6 +31,7 @@ async function oidcToken() {
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${inp("token")}` };
     const o = await oidcToken().catch(() => ""); if (o) headers["X-GitHub-OIDC"] = o;
     const r = await fetch(inp("endpoint"), { method: "POST", headers, body: JSON.stringify(b) });
-    console.log(`ci-earlywarn beacon: ${r.status} (step category: ${b.step_category})`);
+    let verified = false; try { verified = !!(await r.json()).verified; } catch (_) {}
+    console.log(`ci-earlywarn beacon: ${r.status} (step category: ${b.step_category}, oidc attached: ${!!o}, tenant verified: ${verified})`);
   } catch (e) { console.log(`::notice::ci-earlywarn beacon skipped: ${e.name}`); }
 })();
