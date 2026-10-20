@@ -15,6 +15,17 @@ A full example is in `examples/smoke.yml`.
 
 Neutral cross-tenant early warning for GitHub-hosted runner-image regressions.
 
+## Did the ubuntu-latest → 26.04 migration break my build?
+
+GitHub is moving `ubuntu-latest` from 24.04 to 26.04 gradually, between Oct 19 and Nov 19, 2026 ([changelog](https://github.blog/changelog/2026-09-17-ubuntu-26-generally-available-and-latest-migration/), [runner-images#14748](https://github.com/actions/runner-images/issues/14748)). Quick check:
+
+1. **Which image ran?** Failed run → *Set up job* → *Runner Image* (or `echo "$ImageOS $ImageVersion"`). Compare with the last green run.
+2. **Pin and re-run:** `runs-on: ubuntu-24.04`. Green on 24.04 and red on 26.04 means it's the image.
+3. **Diff the software:** [Ubuntu2404-Readme](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md) vs [Ubuntu2604-Readme](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md). Defaults move (Python 3.12→3.14, Node 22→24, OpenSSL 3.0→3.5, Clang 16–18→20–22); some tools are no longer listed (e.g. Java 8, Julia, Miniconda, Pulumi, Mercurial).
+4. **Fix:** install/pin what you depend on (`setup-python`, `setup-node`, `setup-java`, explicit `apt-get`), add the OS version to cache keys, and test with a `[ubuntu-24.04, ubuntu-26.04]` matrix.
+
+CI Early-Warn adds the cross-repo view: whether failures jump on a new `ImageVersion` across many repos, not just yours.
+
 ## Components
 - `action/` – opt-in composite GitHub Action (`action.yml` + `beacon.py`, stdlib only). Add as the LAST step of a job:
   ```yaml
