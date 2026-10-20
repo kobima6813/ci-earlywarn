@@ -88,8 +88,8 @@ class V11(unittest.TestCase):
     def test_image_regression_label(self):
         db = store.connect(); t0 = 1_000_000; A1 = "aaaaaaaaaaaaaaaa"
         _img(db, self.T, "2", "failure", t0, actions=[A1, "bbbbbbbbbbbbbbbb"])        # new version fails
-        _img(db, self.T, "1", "success", t0 - 1000, actions=[A1])                     # baseline
-        _img(db, self.T, "1", "success", t0 + 10, actions=[A1])                       # same tenants on old version still pass
+        _img(db, self.T, "1", "success", t0 - 1000, actions=[A1, "bbbbbbbbbbbbbbbb"])  # baseline
+        _img(db, self.T, "1", "success", t0 + 10, actions=[A1, "bbbbbbbbbbbbbbbb"])                      # same tenants on old version still pass
         r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]
         self.assertTrue(r["flagged"]); self.assertEqual(r["diagnosis"]["label"], "likely image regression")
         self.assertEqual(r["diagnosis"]["suspect_action_hash"], None)
@@ -105,6 +105,30 @@ class V11(unittest.TestCase):
         self.assertTrue(r["flagged"]); self.assertEqual(r["diagnosis"]["label"], "likely action breakage")
         self.assertEqual(r["diagnosis"]["suspect_action_hash"], BAD)
         self.assertIn("action breakage", A.regression_payload(r)["title"])
+    def test_same_day_confounded_is_ambiguous(self):
+        db = store.connect(); t0 = 1_000_000; OLD, NEW = "0000000000000001", "0000000000000002"
+        _img(db, self.T, "1", "success", t0 - 1000, actions=[OLD])                  # old image + old action: pass
+        _img(db, self.T, "2", "failure", t0, actions=[NEW])                         # everyone took new image + new action same day
+        _img(db, self.T, "1", "success", t0 + 10, actions=[OLD])
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]
+        self.assertTrue(r["flagged"]); d = r["diagnosis"]
+        self.assertEqual(d["label"], "ambiguous"); self.assertIn("confounded", d["ambiguous_reason"])
+        self.assertTrue(d["candidate_action_new_in_window"]); self.assertIn("ambiguous", A.regression_payload(r)["title"])
+    def test_same_day_pinned_tenants_isolate_action(self):
+        db = store.connect(); t0 = 1_000_000; OLD, NEW = "0000000000000001", "0000000000000002"
+        _img(db, self.T, "1", "success", t0 - 1000, actions=[OLD])
+        _img(db, self.T[:6], "2", "failure", t0, actions=[NEW])                     # upgraded action: fail on new image
+        _img(db, self.T[6:], "2", "success", t0, actions=[OLD])                     # pinned old action, same new image: pass
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]
+        self.assertTrue(r["flagged"]); self.assertEqual(r["diagnosis"]["label"], "likely action breakage")
+        self.assertEqual(r["diagnosis"]["suspect_action_hash"], NEW)
+    def test_same_day_image_isolated_within_action_version(self):
+        db = store.connect(); t0 = 1_000_000; NEW = "0000000000000002"
+        _img(db, self.T, "1", "success", t0 - 1000, actions=[NEW])
+        _img(db, self.T, "2", "failure", t0, actions=[NEW])                         # same action version fails only on new image
+        _img(db, self.T[:5], "1", "success", t0 + 10, actions=[NEW])                # and passes on old image in same window
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]
+        self.assertEqual(r["diagnosis"]["label"], "likely image regression")
     def test_status_page_shows_label(self):
         db = store.connect(); t0 = 1_000_000
         _img(db, self.T, "1", "success", t0 - 1000); _img(db, self.T, "2", "failure", t0); _img(db, self.T, "1", "success", t0 + 10)

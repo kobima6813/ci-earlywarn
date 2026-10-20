@@ -55,3 +55,29 @@ steps:
     with: {endpoint: "https://<collector>/v1/beacon", token: "${{ secrets.EW_TOKEN }}", job-status: "${{ job.status }}"}
 ```
 - Status page shows UTC and Asia/Jerusalem (`EW_TZ`). Drafts: TERMS_DRAFT.md, DPA_DRAFT.md.
+
+## FAQ (hard questions, honest answers)
+
+**How do you tell a runner-image regression from a popular action breaking?**
+Opt in with `report-actions: "true"`: the beacon then sends a 16-hex hash of each `uses:` ref (`owner/repo@version`) in the job; names are never sent. For a flagged image version the collector picks the action hash shared by most failing tenants and compares strata: the same action version on the *old* image, and runs on the *new* image *without* that action version. Old image passes with it / new image fails without it → image. It fails on other images, or new-image runs without it pass → action.
+
+**What if an action release lands the same day as an image bump?**
+If some tenants are pinned (old action on the new image, or new action still on the old image) the strata above separate the two. If every failing tenant took both at once, no run isolates either cause, and the alert says **`ambiguous`** ("confounded") instead of guessing. Re-running one failing job on the previous image or action version settles it.
+
+**What data is sent?** Server-assigned tenant id (from your token), RUNNER_OS, ImageOS, ImageVersion, job conclusion, a failing-step *category* (install/build/test/…, the step name stays local), optional toolchain major.minor, optional action-ref hashes, timestamp. No code, logs, repo names or secrets. Unknown fields are rejected, and bodies are capped at 2 KB. Beacons are deleted after 90 days.
+
+**Are the action hashes private?** Partly. The salt is public, so anyone can hash a *known* public action and check for it. Private action names aren't exposed unless someone already knows them. That's why it is opt-in (default off).
+
+**False positives with few tenants / cold start?** Nothing is flagged below ≥5 tenants on the new version and ≥3 failing tenants, plus a +15 pt and ≥2× jump vs. the previous version. Until the network is big, alerts will be rare. Meanwhile `collector/bootstrap.py` watches public runner-images releases and "regression" issues.
+
+**Flaky tests and matrix jobs?** A tenant counts as failing only if ≥50% of its runs on that version fail, and the signal is the cross-tenant *share* vs the previous image, so one flaky repo doesn't move it. Matrix legs are separate beacons from the same tenant and count as one tenant.
+
+**Self-hosted runners?** Not covered. They have no ImageOS/ImageVersion, so the JS action sends nothing there and logs why.
+
+**Can someone poison it with fake beacons?** Tenants need a token, rate limits apply per IP (IPv6 /48) and per token, and only *eligible* tenants count toward thresholds: ≥7 days old, or verified with a GitHub OIDC token. Verified tokens of the same GitHub owner collapse into one tenant. A determined attacker with many real, aged GitHub orgs could still add noise. Alerts say "suspected" for that reason.
+
+**Latency?** The detector runs on every beacon. Once thresholds are met, the next beacon flags it, typically within hours of an image rollout reaching enough tenants.
+
+**Cost / does it slow my CI or fail my job?** It's free. One HTTPS POST at the end of the job (~1 s), never fails the job, no dependencies.
+
+**How do I get alerts?** Public status page `/`, JSON `/v1/status` and `/v1/alerts`, Slack-compatible webhook on self-hosted collectors (`EW_WEBHOOK_URL`). Per-tenant email/Slack subscriptions aren't built yet.

@@ -22,38 +22,62 @@ def tenant_failure_share(rows):
     failing = sum(1 for f, n in per.values() if f / n >= 0.5)
     return failing / len(per), len(per), failing
 
-def classify(db, image_os, prev, cur, t_from, t_to, failing, eligible=None, min_share=0.6):
-    """Label a suspected regression: 'likely action breakage' vs 'likely image regression' vs 'unclear'.
-    failing: tenants failing on `cur`. Image split = share of them that passed on `prev` during the same window.
-    Action concentration = an action hash present in >= min_share of failing tenants' failed runs on `cur`
-    that also fails (>=50% of runs) for >= 2 tenants on OTHER image versions in the same window."""
+def _stats(rows, ok, pred):
+    """rows: (tenant, conclusion, actions_json). Per-tenant (failures, runs) for runs matching pred(actions)."""
+    per = {}
+    for t, c, acts in rows:
+        a = json.loads(acts or "[]")
+        if ok(t) and a and pred(a):
+            x = per.setdefault(t, [0, 0]); x[1] += 1; x[0] += c == "failure"
+    n = len(per); f = sum(1 for a, b in per.values() if a / b >= 0.5)
+    return dict(tenants=n, failing_tenants=f, share=round(f / n, 3) if n else None)
+
+def classify(db, image_os, prev, cur, t_from, t_to, failing, eligible=None, min_share=0.6, min_n=2):
+    """Label a suspected regression: 'likely action breakage' | 'likely image regression' | 'ambiguous' | 'unclear'.
+    Stratified test for the candidate action hash H (one action@version, shared by most failing tenants on `cur`):
+      action evidence: H fails for >=2 tenants on OTHER image versions, or on `cur` runs WITHOUT H pass (>=2 tenants).
+      image evidence:  on `cur`, runs WITHOUT H also fail (>=2 tenants), or on `prev`, runs WITH H pass (>=2 tenants).
+    Both or neither (e.g. new image and new action release landed together and every tenant took both) -> 'ambiguous'.
+    Without action data: image split (failing tenants that passed on `prev` in the same window) decides."""
     ok = (lambda t: True) if eligible is None else (lambda t: t in eligible)
     failing = set(failing)
     passed_prev = {t for (t,) in db.execute("SELECT DISTINCT tenant FROM beacons WHERE image_os=? AND image_version=? AND conclusion='success' AND ts BETWEEN ? AND ?",
                                             (image_os, prev, t_from, t_to)) if t in failing}
     split = len(passed_prev) / len(failing) if failing else 0.0
+    Q = "SELECT tenant, conclusion, actions FROM beacons WHERE image_os=? AND image_version=? AND conclusion IN ('success','failure') AND ts BETWEEN ? AND ?"
+    cur_rows = db.execute(Q, (image_os, cur, t_from, t_to)).fetchall()
     per_hash = {}
-    for t, acts in db.execute("SELECT tenant, actions FROM beacons WHERE image_os=? AND image_version=? AND conclusion='failure' AND ts BETWEEN ? AND ?",
-                              (image_os, cur, t_from, t_to)):
-        if t in failing:
+    for t, c, acts in cur_rows:
+        if c == "failure" and t in failing:
             for h in json.loads(acts or "[]"): per_hash.setdefault(h, set()).add(t)
     reporting = {t for ts_ in per_hash.values() for t in ts_}
-    suspect, cross = None, 0
+    H = None
     if reporting:
         h, ts_ = max(per_hash.items(), key=lambda kv: (len(kv[1]), kv[0]))
-        if len(ts_) >= max(2, min_share * len(reporting)):
-            per = {}
-            for t, c, acts in db.execute("SELECT tenant, conclusion, actions FROM beacons WHERE NOT (image_os=? AND image_version=?) AND conclusion IN ('success','failure') AND ts BETWEEN ? AND ?",
-                                         (image_os, cur, t_from, t_to)):
-                if ok(t) and h in json.loads(acts or "[]"):
-                    x = per.setdefault(t, [0, 0]); x[1] += 1; x[0] += c == "failure"
-            cross = sum(1 for f, n in per.values() if f / n >= 0.5)
-            if cross >= 2: suspect = h
-    if suspect: label = "likely action breakage"
-    elif split >= 0.5: label = "likely image regression"
-    else: label = "unclear"
-    return dict(label=label, image_split=round(split, 3), tenants_passing_on_prev=len(passed_prev),
-                suspect_action_hash=suspect, action_reporting_tenants=len(reporting), suspect_cross_version_failing_tenants=cross)
+        if len(ts_) >= max(2, min_share * len(reporting)): H = h
+    out = dict(image_split=round(split, 3), tenants_passing_on_prev=len(passed_prev), action_reporting_tenants=len(reporting),
+               suspect_action_hash=None, candidate_action_hash=H, suspect_cross_version_failing_tenants=0)
+    if H is None:
+        out["label"] = "likely image regression" if split >= 0.5 else "unclear"; return out
+    has, hasnt = (lambda a: H in a), (lambda a: H not in a)
+    other = db.execute("SELECT tenant, conclusion, actions FROM beacons WHERE NOT (image_os=? AND image_version=?) AND conclusion IN ('success','failure') AND ts BETWEEN ? AND ?",
+                       (image_os, cur, t_from, t_to)).fetchall()
+    st = dict(cur_with=_stats(cur_rows, ok, has), cur_without=_stats(cur_rows, ok, hasnt),
+              prev_with=_stats(db.execute(Q, (image_os, prev, t_from, t_to)).fetchall(), ok, has), other_with=_stats(other, ok, has))
+    first = db.execute("SELECT MIN(ts) FROM beacons WHERE actions LIKE ?", (f'%"{H}"%',)).fetchone()[0]
+    out.update(strata=st, candidate_action_first_seen=first, candidate_action_new_in_window=first is not None and first >= t_from - 24 * 3600)
+    cw, cwo, pw, ow = st["cur_with"], st["cur_without"], st["prev_with"], st["other_with"]
+    cur_bad = (cw["share"] or 0) >= 0.5
+    action_ev = ow["failing_tenants"] >= min_n or (cur_bad and cwo["tenants"] >= min_n and cwo["share"] < 0.5)
+    image_ev = (cwo["tenants"] >= min_n and cwo["share"] >= 0.5) or (cur_bad and pw["tenants"] >= min_n and pw["share"] < 0.5)
+    out["suspect_cross_version_failing_tenants"] = ow["failing_tenants"]
+    if action_ev and not image_ev: out["label"] = "likely action breakage"; out["suspect_action_hash"] = H
+    elif image_ev and not action_ev: out["label"] = "likely image regression"
+    else:
+        out["label"] = "ambiguous"
+        out["ambiguous_reason"] = ("image and action both implicated (possibly an interaction)" if action_ev else
+                                   "confounded: failing tenants all moved to the new image and this action version together; no run isolates either")
+    return out
 
 def evaluate(db, th=Thresholds(), eligible=None):
     """eligible: optional set of tenant keys allowed to count toward wave thresholds (sybil resistance)."""

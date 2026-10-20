@@ -40,6 +40,7 @@ async function jobActions() {
 (async () => {
   try {
     const status = inp("job-status").toLowerCase();
+    if (!process.env.ImageOS || !process.env.ImageVersion) { console.log("ci-earlywarn beacon: not sent (no ImageOS/ImageVersion: self-hosted or non-GitHub runner image)"); return; }
     const failuresOnly = inp("failures-only") === "true";
     if (failuresOnly && status !== "failure") { console.log("ci-earlywarn beacon: not sent (failures-only mode, job did not fail)"); return; }
     const actions = inp("report-actions") === "true" ? await jobActions().catch(() => []) : [];
