@@ -23,6 +23,28 @@ jobs:
           endpoint: https://collector-production-5b85.up.railway.app/v1/beacon
           token: ${{ secrets.EW_TOKEN }}
           job-status: ${{ job.status }}
+  v11-modes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Beacon with report-actions (new format)
+        if: always()
+        uses: ./action/js
+        with:
+          endpoint: https://collector-production-5b85.up.railway.app/v1/beacon
+          token: ${{ secrets.EW_TOKEN }}
+          job-status: ${{ job.status }}
+          report-actions: "true"
+      - name: Beacon in failures-only mode (job passed, so nothing must be sent)
+        if: always()
+        uses: ./action/js
+        with:
+          endpoint: https://collector-production-5b85.up.railway.app/v1/beacon
+          token: ${{ secrets.EW_TOKEN }}
+          job-status: ${{ job.status }}
+          failures-only: "true"
   published-action:
     runs-on: ubuntu-latest
     steps:

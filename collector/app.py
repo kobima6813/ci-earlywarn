@@ -1,4 +1,4 @@
-"""Collector API v0.2 (stdlib). POST /v1/signup, POST /v1/verify, POST /v1/beacon, GET /v1/status, /v1/alerts, /, /healthz."""
+"""Collector API v0.3 (stdlib). POST /v1/signup, POST /v1/verify, POST /v1/beacon, GET /v1/status, /v1/alerts, /, /healthz."""
 import json, os, html, time, datetime, threading
 from zoneinfo import ZoneInfo
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -49,7 +49,7 @@ def fmt_times(tz):
 def status_html(db, res, tz="Asia/Jerusalem"):
     rows = "".join(f"<tr class={'bad' if r['flagged'] else 'ok'}><td>{html.escape(r['image_os'])}</td><td>{html.escape(r['version'])}</td>"
                    f"<td>{r['tenants']}</td><td>{r['failing_tenants']}</td><td>{r['share']:.0%}</td><td>{r['prev_share']:.0%}</td>"
-                   f"<td>{'REGRESSION' if r['flagged'] else 'healthy'}</td></tr>" for r in res)
+                   f"<td>{('REGRESSION: ' + html.escape((r.get('diagnosis') or {}).get('label', ''))) if r['flagged'] else 'healthy'}</td></tr>" for r in res)
     al = "".join(f"<li><b>{html.escape(a['kind'])}</b> {html.escape(a.get('title',''))}</li>" for a in store.alerts(db, 20))
     return f"""<!doctype html><html><head><meta charset=utf-8><title>CI Early-Warn status</title><style>
 body{{font-family:system-ui,Arial;margin:24px}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:4px 8px}}

@@ -1,11 +1,20 @@
 import json, os, urllib.request
 
 def regression_payload(r):
-    return {"title": f"Runner image regression suspected: {r['image_os']} {r['version']}",
+    d = r.get("diagnosis") or {}
+    p = {"title": f"Runner image regression suspected: {r['image_os']} {r['version']}",
             "image_os": r["image_os"], "version": r["version"], "prev_version": r["prev_version"],
             "failing_tenants": r["failing_tenants"], "tenants": r["tenants"], "share": r["share"], "prev_share": r["prev_share"],
             "categories": r.get("failure_categories", {}),
             "advice": f"Consider pinning to {r['image_os']} {r['prev_version']}-equivalent label or adding a workaround; watch status page."}
+    if d:
+        p["diagnosis"] = d.get("label")
+        p["image_split"] = d.get("image_split")
+        if d.get("suspect_action_hash"): p["suspect_action_hash"] = d["suspect_action_hash"]
+        if d.get("label") == "likely action breakage":
+            p["title"] = f"Likely action breakage (seen on {r['image_os']} {r['version']})"
+            p["advice"] = "Failing tenants share one action that also fails on other image versions; check recently updated actions before blaming the image."
+    return p
 
 def slack(p):
     lines = [f"*{p['title']}*"] + [f"• {k}: {v}" for k, v in p.items() if k != "title"]

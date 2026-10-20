@@ -7,6 +7,8 @@ inputs:
   job-status: {description: "The job status; pass the job.status context expression", required: true}
   send-toolchain: {description: "Send toolchain major.minor versions", required: false, default: "true"}
   oidc: {description: "Attach a GitHub OIDC token to verify the tenant (needs permissions: id-token: write)", required: false, default: "true"}
+  failures-only: {description: "Send a beacon only when the job failed (passes are not sent)", required: false, default: "false"}
+  report-actions: {description: "Send salted hashes of this job's uses: action refs, to tell action breakage from image regressions", required: false, default: "false"}
 runs:
   using: node20
   main: index.js

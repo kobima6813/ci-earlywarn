@@ -46,6 +46,70 @@ class Detector(unittest.TestCase):
     def test_version_sort(self):
         self.assertLess(detector.version_key("20260101.9"), detector.version_key("20260101.10"))
 
+def _img(db, tenants, ver, concl, t0, n=3, mode=None, actions=None):
+    for t in tenants:
+        for i in range(n):
+            b = {"tenant": t, "image_os": "u", "image_version": ver, "conclusion": concl, "ts": t0 + i}
+            if mode: b["mode"] = mode
+            if actions is not None: b["actions"] = actions
+            store.insert(db, b)
+
+class V11(unittest.TestCase):
+    T = [f"t{i}" for i in range(8)]
+    def test_old_beacons_still_valid_and_migration(self):
+        import sqlite3, tempfile
+        p = tempfile.mktemp(); raw = sqlite3.connect(p)
+        raw.executescript("CREATE TABLE beacons(id INTEGER PRIMARY KEY, tenant TEXT, runner_os TEXT, image_os TEXT, image_version TEXT, conclusion TEXT, step_category TEXT, toolchain TEXT, ts INTEGER);")
+        raw.execute("INSERT INTO beacons(tenant,image_os,image_version,conclusion,ts) VALUES('a','u','1','success',1)"); raw.commit(); raw.close()
+        db = store.connect(p); store.insert(db, {"v": 2, "tenant": "b", "image_os": "u", "image_version": "1", "conclusion": "failure"})
+        self.assertEqual(db.execute("SELECT COUNT(*) FROM beacons WHERE COALESCE(mode,'all')='all'").fetchone()[0], 2)
+    def test_rejects_bad_new_fields(self):
+        db = store.connect(); base = {"tenant": "t", "image_os": "u", "image_version": "1", "conclusion": "failure"}
+        for bad in ({"mode": "x"}, {"actions": ["actions/checkout@v4"]}, {"actions": "ab" * 8}, {"actions": ["0123456789abcdef"] * 21}):
+            with self.assertRaises(ValueError): store.insert(db, {**base, **bad})
+        store.insert(db, {**base, "mode": "failures_only", "actions": ["0123456789abcdef"]})
+    def test_failures_only_tenants_do_not_inflate_share(self):
+        db = store.connect(); t0 = 1_000_000
+        _img(db, self.T, "1", "success", t0)                       # 8 full tenants healthy on both versions
+        _img(db, self.T, "2", "success", t0 + 100)
+        fo = [f"fo{i}" for i in range(6)]
+        _img(db, fo, "1", "failure", t0, n=1, mode="failures_only")  # their normal background failures
+        _img(db, fo, "2", "failure", t0 + 100, n=1, mode="failures_only")
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]
+        self.assertFalse(r["flagged"]); self.assertEqual(r["share"], 0.0); self.assertEqual(r["tenants"], 8)
+        self.assertEqual(r["failures_only_tenants"], 6)
+    def test_failures_only_tenants_count_toward_min_failing(self):
+        db = store.connect(); t0 = 1_000_000
+        _img(db, self.T, "1", "success", t0)
+        _img(db, self.T[:2], "2", "failure", t0 + 100); _img(db, self.T[2:], "2", "success", t0 + 100)
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]; self.assertFalse(r["flagged"])  # only 2 failing
+        _img(db, ["fo1"], "2", "failure", t0 + 200, n=1, mode="failures_only")
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]; self.assertTrue(r["flagged"])
+    def test_image_regression_label(self):
+        db = store.connect(); t0 = 1_000_000; A1 = "aaaaaaaaaaaaaaaa"
+        _img(db, self.T, "2", "failure", t0, actions=[A1, "bbbbbbbbbbbbbbbb"])        # new version fails
+        _img(db, self.T, "1", "success", t0 - 1000, actions=[A1])                     # baseline
+        _img(db, self.T, "1", "success", t0 + 10, actions=[A1])                       # same tenants on old version still pass
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]
+        self.assertTrue(r["flagged"]); self.assertEqual(r["diagnosis"]["label"], "likely image regression")
+        self.assertEqual(r["diagnosis"]["suspect_action_hash"], None)
+        self.assertNotIn("action breakage", A.regression_payload(r)["title"])
+    def test_action_breakage_label(self):
+        db = store.connect(); t0 = 1_000_000; BAD = "dddddddddddddddd"
+        _img(db, self.T, "1", "success", t0 - 1000, actions=["cccccccccccccccc"])
+        _img(db, self.T, "2", "failure", t0, actions=[BAD, "cccccccccccccccc"])
+        _img(db, self.T[:4], "1", "failure", t0 + 10, actions=[BAD])                  # same action fails on the old image too
+        for t in self.T[:4]:
+            store.insert(db, {"tenant": t, "image_os": "w", "image_version": "9", "conclusion": "failure", "ts": t0 + 20, "actions": [BAD]})
+        r = [x for x in detector.evaluate(db) if x["version"] == "2"][0]
+        self.assertTrue(r["flagged"]); self.assertEqual(r["diagnosis"]["label"], "likely action breakage")
+        self.assertEqual(r["diagnosis"]["suspect_action_hash"], BAD)
+        self.assertIn("action breakage", A.regression_payload(r)["title"])
+    def test_status_page_shows_label(self):
+        db = store.connect(); t0 = 1_000_000
+        _img(db, self.T, "1", "success", t0 - 1000); _img(db, self.T, "2", "failure", t0); _img(db, self.T, "1", "success", t0 + 10)
+        self.assertIn("likely image regression", app.status_html(db, detector.evaluate(db)))
+
 class Alerts(unittest.TestCase):
     def test_formats(self):
         r = {"image_os": "ubuntu24", "version": "2", "prev_version": "1", "failing_tenants": 4, "tenants": 20, "share": .2, "prev_share": 0}
