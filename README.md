@@ -19,6 +19,8 @@ Live status: https://collector-production-5b85.up.railway.app/ · API: `/v1/stat
 
 ## Free CI cost audit
 
+**Instant estimate:** use the [free CI cost check](https://kobima6813.github.io/ci-earlywarn/cost.html) — enter your minutes per runner type and see your monthly bill (runs in your browser). Need a hand? See the fixed-price [GitHub Actions security & cost review](https://kobima6813.github.io/ci-earlywarn/review.html) and the free scanner [actions-harden](https://github.com/kobima6813/actions-harden).
+
 Want to know where your GitHub Actions minutes go? Email your workflow file(s) (`.github/workflows/*.yml`) to [conformance@mail.grokbot.com](mailto:conformance@mail.grokbot.com?subject=CI%20audit) with the subject **"CI audit"**. A screenshot of your Actions usage page is optional, but it helps.
 
 You get back a short report on likely wasted runner minutes, with concrete fixes: concurrency cancel for superseded runs, path filters, matrix size, caching, artifact retention and runner size.

@@ -1,0 +1,23 @@
+<title>Free GitHub Actions CI cost check</title><meta name="description" content="Estimate your monthly GitHub Actions bill by runner type, using GitHub's published per-minute rates."></head><body>
+<section class="hero"><div class="wrap"><p class="eyebrow">Free tool · runs in your browser · nothing is sent anywhere</p><h1>What does your CI really cost?</h1><p class="lead">Enter billable minutes per month for each runner type (find them under Settings → Billing → Usage). We multiply by GitHub's published per-minute rates.</p></div></section>
+<section><div class="wrap grid2"><div class="calc"><div class="tablewrap"><table id="t"><tr><th>Runner</th><th>USD / min</th><th>Minutes / month</th><th>Cost</th></tr></table></div>
+<p><label><input type="checkbox" id="pub" style="width:auto"> Public repository (standard runners are free)</label></p>
+<p class="small">Rates from GitHub Docs, <a href="https://docs.github.com/en/billing/reference/actions-runner-pricing">Actions runner pricing</a> (checked 22 Oct 2026). Private repos also get included minutes from your plan for standard runners (e.g. 2,000/month on Free, 3,000 on Pro/Team) — subtract those yourself. Larger runners are never included or free. Estimate only.</p></div>
+<div><div class="freebox"><div class="small">Estimated monthly cost</div><div class="total" id="tot">$0.00</div><div class="small" id="yr">$0 / year</div><h3 style="margin-top:18px">Ways to cut it</h3><ul id="tips" class="steps"></ul><a class="btn lg" href="review.html#pricing">Get a fixed-price review</a><p class="small">Our $149 Team review finds wasted minutes and security gaps in up to 5 workflows.</p></div></div></div></section>
+<script>
+const R=[["Linux 2-core (x64)",0.006,1],["Linux 2-core (arm64)",0.005,1],["Linux 1-core (slim)",0.002,1],["Windows 2-core",0.010,1],["macOS 3/4-core",0.062,1],["Linux 4-core (larger)",0.012,0],["Linux 8-core (larger)",0.022,0],["Linux 16-core (larger)",0.042,0],["Linux 32-core (larger)",0.082,0],["Linux 64-core (larger)",0.162,0],["Windows 4-core (larger)",0.022,0],["Windows 8-core (larger)",0.042,0],["Windows 16-core (larger)",0.082,0],["macOS 12-core (larger)",0.077,0],["macOS 5-core M2 Pro (larger)",0.102,0]];
+const t=document.getElementById('t'),f=n=>'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+R.forEach((r,i)=>{const tr=t.insertRow();tr.innerHTML='<td>'+r[0]+'</td><td>$'+r[1].toFixed(3)+'</td><td><input type="number" min="0" step="100" value="0" data-i="'+i+'"></td><td id="c'+i+'">$0.00</td>'});
+function calc(){const pub=document.getElementById('pub').checked;let tot=0,by={};document.querySelectorAll('input[data-i]').forEach(e=>{const r=R[e.dataset.i],m=Math.max(0,+e.value||0),c=(pub&&r[2])?0:m*r[1];tot+=c;by[r[0]]=c;document.getElementById('c'+e.dataset.i).textContent=f(c)});
+document.getElementById('tot').textContent=f(tot);document.getElementById('yr').textContent=f(tot*12)+' / year';
+const tips=[],mac=by["macOS 3/4-core"]+by["macOS 12-core (larger)"]+by["macOS 5-core M2 Pro (larger)"],win=Object.keys(by).filter(k=>k.startsWith('Windows')).reduce((a,k)=>a+by[k],0),x64=by["Linux 2-core (x64)"];
+if(mac>0)tips.push('macOS is ~10× Linux per minute: run only iOS/macOS-specific jobs there; lint and unit-test on Linux (potential '+f(mac*0.5)+'/mo if half moves).');
+if(win>0)tips.push('Windows costs ~1.7× Linux: keep Windows to one smoke job in the matrix.');
+if(x64>0)tips.push('Linux arm64 is ~17% cheaper than x64 ('+f(x64*0.17)+'/mo) if your toolchain supports it.');
+tips.push('Add <code>concurrency</code> with <code>cancel-in-progress: true</code> so superseded pushes stop burning minutes.');
+tips.push('Cache dependencies (actions/cache or setup-* cache:) and use <code>paths:</code> filters to skip docs-only changes.');
+tips.push('Set <code>timeout-minutes</code> on every job — hung jobs run up to 6 hours.');
+document.getElementById('tips').innerHTML=tips.map(x=>'<li>'+x+'</li>').join('')}
+document.addEventListener('input',calc);calc();
+</script>
+
