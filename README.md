@@ -4,6 +4,16 @@
 
 Get early warning when a new GitHub-hosted runner image starts breaking builds across many repos, often days before a public issue shows up. Opt-in, anonymized and MIT-licensed.
 
+## Free CI cost audit
+
+Want to know where your GitHub Actions minutes go? Email your workflow file(s) (`.github/workflows/*.yml`) to [conformance@mail.grokbot.com](mailto:conformance@mail.grokbot.com?subject=CI%20audit) with the subject **"CI audit"**. A screenshot of your Actions usage page is optional, but it helps.
+
+You get back a short report on likely wasted runner minutes, with concrete fixes: concurrency cancel for superseded runs, path filters, matrix size, caching, artifact retention and runner size.
+
+- Only the workflow YAML is needed. Please send no secrets and no source code.
+- Reply within 2 business days.
+- Your files are deleted after 30 days.
+
 ## Install (3 lines)
 ```bash
 curl -s -X POST https://collector-production-5b85.up.railway.app/v1/signup   # -> {"token": "ewt_..."}; save as repo secret EW_TOKEN
