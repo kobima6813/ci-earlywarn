@@ -1,8 +1,21 @@
 # CI Early-Warn
 
-**Live status page:** https://collector-production-5b85.up.railway.app/ · API: `/v1/status`, `/v1/alerts`
+**Know when a new GitHub runner image is breaking builds across many repos, not just yours.**
 
-Get early warning when a new GitHub-hosted runner image starts breaking builds across many repos, often days before a public issue shows up. Opt-in, anonymized and MIT-licensed.
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/kobima6813/ci-earlywarn)](https://github.com/kobima6813/ci-earlywarn/releases)
+[![Live status](https://img.shields.io/badge/live-status%20page-1f5fbf)](https://collector-production-5b85.up.railway.app/)
+[![GitHub stars](https://img.shields.io/github/stars/kobima6813/ci-earlywarn?style=social)](https://github.com/kobima6813/ci-earlywarn/stargazers)
+
+![Live status page: image versions and recent runner-image alerts](docs/img/status.png)
+
+*Screenshot of the live status page (21 Oct 2026). The network is new, so tenant counts are still small; alerts include real image rollouts and public regression reports from actions/runner-images.*
+
+**Quick start:** add one last step to a job: `- {if: always(), uses: kobima6813/ci-earlywarn/action/js@v0.2.1, with: {...}}` ([3-line install](#install-3-lines)).
+
+**Why:** when `ubuntu-latest` or `macos-*` gets a new image and your build goes red, you lose hours deciding whether it's your code or the image. If several independent repos break on the same new image version, that's the answer. CI Early-Warn sends one anonymized beacon per job (image, version, pass/fail, failure category; no repo names, logs or code) and flags image versions where failures jump.
+
+Live status: https://collector-production-5b85.up.railway.app/ · API: `/v1/status`, `/v1/alerts`. Opt-in, anonymized, MIT.
 
 ## Free CI cost audit
 
@@ -102,3 +115,7 @@ If some tenants are pinned (old action on the new image, or new action still on 
 **Cost / does it slow my CI or fail my job?** It's free. One HTTPS POST at the end of the job (~1 s), never fails the job, no dependencies.
 
 **How do I get alerts?** Public status page `/`, JSON `/v1/status` and `/v1/alerts`, Slack-compatible webhook on self-hosted collectors (`EW_WEBHOOK_URL`). Per-tenant email/Slack subscriptions aren't built yet.
+
+---
+
+If this saved you a "is it me or the image?" afternoon, a ⭐ helps other teams find it, and more tenants make the warnings better.
